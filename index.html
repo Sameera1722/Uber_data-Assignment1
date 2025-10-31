@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D Transformation Visualizer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f8f9fa;
+    }
+
+    h2 {
+      margin-top: 20px;
+    }
+
+    canvas {
+      border: 2px solid #333;
+      background: white;
+      margin-top: 20px;
+      cursor: crosshair;
+    }
+
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .controls input {
+      width: 70px;
+      margin: 3px;
+    }
+
+    select, button {
+      padding: 5px;
+      font-size: 14px;
+    }
+
+    .matrix {
+      margin-top: 20px;
+      font-family: monospace;
+    }
+
+    .info {
+      color: #555;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>2D Transformation Visualizer</h2>
+  <p>Draw or choose shapes and see transformations in real time</p>
+
+  <div>
+    <label for="shape">Shape:</label>
+    <select id="shape">
+      <option value="custom">Custom (click on canvas)</option>
+      <option value="square">Square</option>
+      <option value="rectangle">Rectangle</option>
+      <option value="triangle">Triangle</option>
+    </select>
+    <button id="clear">Clear</button>
+  </div>
+
+  <canvas id="canvas" width="600" height="400"></canvas>
+
+  <div class="controls">
+    <div>
+      <label>Translate X: <input id="tx" type="number" value="0" /></label>
+      <label>Translate Y: <input id="ty" type="number" value="0" /></label>
+    </div>
+
+    <div>
+      <label>Rotate (deg): <input id="angle" type="number" value="0" /></label>
+    </div>
+
+    <div>
+      <label>Scale X: <input id="sx" type="number" value="1" step="0.1" /></label>
+      <label>Scale Y: <input id="sy" type="number" value="1" step="0.1" /></label>
+    </div>
+
+    <div>
+      <label>Shear X: <input id="shx" type="number" value="0" step="0.1" /></label>
+      <label>Shear Y: <input id="shy" type="number" value="0" step="0.1" /></label>
+    </div>
+  </div>
+
+  <div class="matrix">
+    <h3>Transformation Matrix:</h3>
+    <pre id="matrix-output">[ 1 0 0 ]<br>[ 0 1 0 ]<br>[ 0 0 1 ]</pre>
+  </div>
+
+  <div class="info" id="info">Click on the canvas to add points for your shape (3+ points = polygon).</div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const shapeSelect = document.getElementById("shape");
+    const clearBtn = document.getElementById("clear");
+
+    let shapePoints = [];
+    let isCustom = true;
+
+    // --- Draw helper function ---
+    function drawShape(points, color = "blue") {
+      if (points.length === 0) return;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+      if (points.length > 2) ctx.closePath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // --- Create preset shapes ---
+    function createPresetShape(type) {
+      const size = 60;
+      if (type === "square") {
+        shapePoints = [
+          { x: -size, y: -size },
+          { x: size, y: -size },
+          { x: size, y: size },
+          { x: -size, y: size },
+        ];
+      } else if (type === "rectangle") {
+        shapePoints = [
+          { x: -100, y: -50 },
+          { x: 100, y: -50 },
+          { x: 100, y: 50 },
+          { x: -100, y: 50 },
+        ];
+      } else if (type === "triangle") {
+        shapePoints = [
+          { x: 0, y: -80 },
+          { x: 80, y: 80 },
+          { x: -80, y: 80 },
+        ];
+      }
+    }
+
+    // --- Transformation + drawing ---
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+
+      if (shapePoints.length === 0) {
+        ctx.restore();
+        return;
+      }
+
+      const tx = parseFloat(document.getElementById("tx").value);
+      const ty = parseFloat(document.getElementById("ty").value);
+      const angle = parseFloat(document.getElementById("angle").value);
+      const sx = parseFloat(document.getElementById("sx").value);
+      const sy = parseFloat(document.getElementById("sy").value);
+      const shx = parseFloat(document.getElementById("shx").value);
+      const shy = parseFloat(document.getElementById("shy").value);
+
+      const rad = (angle * Math.PI) / 180;
+
+      // 3x3 Transformation matrix
+      const matrix = [
+        [sx * Math.cos(rad) + shy * Math.sin(rad), shx * Math.cos(rad) - sy * Math.sin(rad), tx],
+        [sx * Math.sin(rad) + shy * Math.cos(rad), shx * Math.sin(rad) + sy * Math.cos(rad), ty],
+        [0, 0, 1],
+      ];
+
+      // Update matrix display
+      document.getElementById("matrix-output").innerHTML = `
+        [ ${matrix[0].map(n => n.toFixed(2)).join(" ")} ]<br>
+        [ ${matrix[1].map(n => n.toFixed(2)).join(" ")} ]<br>
+        [ ${matrix[2].map(n => n.toFixed(2)).join(" ")} ]
+      `;
+
+      // Apply matrix to each vertex
+      const transformed = shapePoints.map(p => ({
+        x: p.x * matrix[0][0] + p.y * matrix[0][1] + matrix[0][2],
+        y: p.x * matrix[1][0] + p.y * matrix[1][1] + matrix[1][2],
+      }));
+
+      drawShape(transformed);
+      ctx.restore();
+    }
+
+    // --- Handle canvas click for custom shapes ---
+    canvas.addEventListener("click", (e) => {
+      if (!isCustom) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left - canvas.width / 2;
+      const y = e.clientY - rect.top - canvas.height / 2;
+      shapePoints.push({ x, y });
+      draw();
+    });
+
+    // --- Shape dropdown ---
+    shapeSelect.addEventListener("change", () => {
+      const type = shapeSelect.value;
+      isCustom = type === "custom";
+      shapePoints = [];
+      if (!isCustom) createPresetShape(type);
+      draw();
+    });
+
+    // --- Clear button ---
+    clearBtn.addEventListener("click", () => {
+      shapePoints = [];
+      draw();
+    });
+
+    // --- Update on input change ---
+    document.querySelectorAll("input").forEach((inp) => {
+      inp.addEventListener("input", draw);
+    });
+
+    draw();
+  </script>
+</body>
+</html>
+
+ip project code
